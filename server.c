@@ -1,18 +1,19 @@
 #include "headers.h"
+#include "message.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
-#define MAX_FLOATS 30000
-
-int main(void)
-{
+int main(void) {
     int socket_desc, client_sock, client_size;
     struct sockaddr_in server_addr, client_addr;
-
-    float client_floats[MAX_FLOATS]; // buffer to hold received floats
-    int num_elements = 0;            // how many floats client will send
+    FloatMessage msg;
     int port = 2000;
 
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if(socket_desc < 0){
+    if(socket_desc < 0) {
         printf("Error while creating socket\n");
         return -1;
     }
@@ -22,14 +23,14 @@ int main(void)
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    while(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+    while(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         printf("Couldn't bind to the port\n");
         port++;
         server_addr.sin_port = htons(port);
     }
     printf("Done with binding\n");
 
-    if(listen(socket_desc, 1) < 0){
+    if(listen(socket_desc, 1) < 0) {
         printf("Error while listening\n");
         return -1;
     }
@@ -37,47 +38,42 @@ int main(void)
 
     client_size = sizeof(client_addr);
     client_sock = accept(socket_desc, (struct sockaddr*)&client_addr, (socklen_t*)&client_size);
-    if (client_sock < 0){
+    if (client_sock < 0) {
         printf("Can't accept connection\n");
         return -1;
     }
     printf("Client connected at IP: %s and port: %d\n",
            inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-    // Receive number of floats first
-    if (recv(client_sock, &num_elements, sizeof(int), 0) <= 0) {
-        printf("Failed to receive float count\n");
-        return -1;
-    }
+    // Receive the entire FloatMessage struct
+    int total_bytes = sizeof(FloatMessage);
+    int received_bytes = 0;
+    char* buffer = (char*)&msg;
 
-    if (num_elements > MAX_FLOATS) {
-        printf("Client attempted to send too many floats: %d\n", num_elements);
-        return -1;
-    }
-
-    int bytes_expected = num_elements * sizeof(float);
-    int bytes_received = 0;
-    char* float_ptr = (char*)client_floats;
-
-    // Loop to ensure all bytes are received (TCP is a stream!)
-    while (bytes_received < bytes_expected) {
-        int chunk = recv(client_sock, float_ptr + bytes_received, bytes_expected - bytes_received, 0);
+    while (received_bytes < total_bytes) {
+        int chunk = recv(client_sock, buffer + received_bytes, total_bytes - received_bytes, 0);
         if (chunk <= 0) {
-            printf("Connection closed or error during float reception\n");
+            printf("Error or disconnection during message receive\n");
             return -1;
         }
-        bytes_received += chunk;
+        received_bytes += chunk;
     }
 
-    printf("Received %d floats from client. Sample:\n", num_elements);
-    for(int i = 0; i < (num_elements > 10 ? 10 : num_elements); i++) {
-        printf("%.2f ", client_floats[i]);
+    printf("Received message from port %d with %d rows and %d columns. Sample:\n", msg.port_number, msg.num_rows, msg.num_cols);
+    for (int i = 0; i < (msg.num_rows > 2 ? 2 : msg.num_rows); i++) {
+        for (int j = 0; j < (msg.num_cols > 2 ? 2 : msg.num_cols); j++) {
+            printf("%.2f ", msg.floats[i][j]);
+        }
+        printf("\n");
     }
-    printf("\n");
 
-    // Send response
-    char server_message[] = "Float array received!";
-    send(client_sock, server_message, strlen(server_message), 0);
+    // Send the received FloatMessage back to the client
+    if (send(client_sock, &msg, sizeof(msg), 0) < 0) {
+        printf("Error while sending the message back to the client\n");
+        return -1;
+    }
+
+    printf("Sent the same message back to the client.\n");
 
     close(client_sock);
     close(socket_desc);
