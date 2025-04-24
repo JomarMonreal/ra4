@@ -9,6 +9,7 @@ int main(void)
 
     float client_floats[MAX_FLOATS]; // buffer to hold received floats
     int num_elements = 0;            // how many floats client will send
+    int port = 2000;
 
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
     if(socket_desc < 0){
@@ -18,12 +19,13 @@ int main(void)
     printf("Socket created successfully\n");
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(2000);
+    server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    if(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+    while(bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
         printf("Couldn't bind to the port\n");
-        return -1;
+        port++;
+        server_addr.sin_port = htons(port);
     }
     printf("Done with binding\n");
 
@@ -31,7 +33,7 @@ int main(void)
         printf("Error while listening\n");
         return -1;
     }
-    printf("Listening for incoming connections...\n");
+    printf("Listening at %d for incoming connections...\n", port);
 
     client_size = sizeof(client_addr);
     client_sock = accept(socket_desc, (struct sockaddr*)&client_addr, (socklen_t*)&client_size);
