@@ -14,4 +14,9 @@ typedef struct {
     int num_of_floats;
 } FloatMessageHeader;
 
+typedef struct {
+    char ip[INET_ADDRSTRLEN];
+    int port;
+} ServerInfo;
+
 #endif

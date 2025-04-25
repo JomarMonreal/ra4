@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.lex": "lex",
+        "*.y": "c",
+        "headers.h": "c"
+    }
+}
