@@ -4,11 +4,44 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #define INITIAL_PORT 2000
 #define SERVER_IP "127.0.0.1"
 #define CHUNK_SIZE 1000
 #define MAX_SERVERS 100
+
+float generateRandomNumber(int min, int max) {
+    return min + rand() % (max + 1 - min) ;
+}
+
+float ** generateMatrix(int size) {
+    float ** matrix = (float **) malloc(sizeof(float*) * size);
+    for (int i = 0; i < size; i++)
+    {
+        matrix[i] = (float *) malloc(sizeof(float) * size);
+        for (int j = 0; j < size; j++)
+        {
+            matrix[i][j] = generateRandomNumber(1,10);
+        }   
+    }
+    return matrix;
+}
+
+// Flattens a 2D matrix into a 1D array
+float* convert2Dto1D(float** matrix, int rows, int cols) {
+    float* array = malloc(rows * cols * sizeof(float));
+    if (!array) {
+        perror("Failed to allocate flattened array");
+        exit(1);
+    }
+
+    for (int i = 0; i < rows; ++i) {
+        memcpy(&array[i * cols], matrix[i], cols * sizeof(float));
+    }
+
+    return array;
+}
 
 // Loads IP:port pairs from a text file
 int load_servers(const char* filename, ServerInfo* servers, int max_servers) {
@@ -106,6 +139,8 @@ void communicate_with_server(const ServerInfo* server, float* data, int num_floa
 }
 
 int main() {
+    srand(time(NULL));
+
     ServerInfo servers[MAX_SERVERS];
     int num_servers = load_servers("servers.txt", servers, MAX_SERVERS);
     if (num_servers <= 0) {
@@ -113,13 +148,33 @@ int main() {
         return 1;
     }
 
-    int num_floats;
-    float* data = prepare_data(&num_floats);
+    int n;
+    printf("Enter matrix dimensions (n): ");
+    scanf("%d", &n);
 
+    float** matrix = generateMatrix(n);
+    float* flat_data = convert2Dto1D(matrix, n, n);
+    int total_floats = n * n;
+
+    int rows_per_server = n / num_servers;
+    int remainder = n % num_servers;
+
+    int current_row = 0;
     for (int s = 0; s < num_servers; ++s) {
-        communicate_with_server(&servers[s], data, num_floats);
+        int rows_to_send = rows_per_server + (s < remainder ? 1 : 0); // distribute remainder
+        float* chunk = convert2Dto1D(&matrix[current_row], rows_to_send, n);
+        int num_floats = rows_to_send * n;
+
+        communicate_with_server(&servers[s], chunk, num_floats);
+        free(chunk);
+
+        current_row += rows_to_send;
     }
 
-    free(data);
+    // Cleanup
+    for (int i = 0; i < n; ++i) free(matrix[i]);
+    free(matrix);
+    free(flat_data);
+
     return 0;
 }
