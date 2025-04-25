@@ -1,111 +1,121 @@
 #include "headers.h"
 #include "message.h"
-#include <stdlib.h>  // For rand() and srand()
-#include <time.h>    // For time() to seed rand()
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
-#define MAX_ROWS 1000
-#define MAX_COLS 1000
+#define INITIAL_PORT 2000
+#define SERVER_IP "127.0.0.1"
+#define CHUNK_SIZE 100  // Define the chunk size (100 floats per chunk)
 
-int main(void) {
-    int socket_desc;
+int main() {
+    int rows;
+    printf("Enter number of data: ");
+    scanf("%d", &rows);
+
+    int num_floats = rows;
+    float* data = malloc(num_floats * sizeof(float));
+    if (!data) {
+        perror("Failed to allocate float array");
+        return 1;
+    }
+
+    // Initialize the float array with some values (for demonstration)
+    for (int i = 0; i < num_floats; ++i) {
+        data[i] = (float)i;
+    }
+
+    // Message header setup
+    FloatMessageHeader header;
+    header.port_number = 2000;
+    header.num_of_floats = rows;
+
+    int sock;
     struct sockaddr_in server_addr;
-    char server_message[2000];
+    int port = INITIAL_PORT;
 
-    int n_servers;  // Number of servers to connect to
-    int port_base = 2000;  // Starting port for the servers
-    int num_rows, num_cols;  // Number of rows and columns for the 2D array
-    float client_floats[MAX_ROWS][MAX_COLS];  // Buffer to hold the 2D array
-
-    FloatMessage message;
-
-    // Ask user for the number of servers and the dimensions of the 2D array
-    printf("Enter the number of servers to connect to: ");
-    scanf("%d", &n_servers);
-    
-    printf("Enter the number of rows in the 2D array: ");
-    scanf("%d", &num_rows);
-    
-    printf("Enter the number of columns in the 2D array: ");
-    scanf("%d", &num_cols);
-    
-    if (num_rows > MAX_ROWS || num_cols > MAX_COLS) {
-        printf("The dimensions exceed the maximum allowed (%dx%d)\n", MAX_ROWS, MAX_COLS);
-        return -1;
-    }
-
-    // Seed the random number generator
-    srand(time(NULL));
-
-    // Generate random floats for the 2D array
-    for (int i = 0; i < num_rows; i++) {
-        for (int j = 0; j < num_cols; j++) {
-            message.floats[i][j] = (float)rand() / RAND_MAX * 100.0;
+    // Connect to the server
+    while (1) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            perror("Socket creation failed");
+            free(data);
+            return 1;
         }
-    }
-    message.num_rows = num_rows;
-    message.num_cols = num_cols;
 
-    int responses_received = 0;
-
-    // Create socket and connect to each server
-    for (int i = 0; i < n_servers; i++) {
-        int current_port = port_base + i;
-        message.port_number = current_port;  // Set port_number for each server
-
-        // Create socket
-        socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-        if (socket_desc < 0) {
-            printf("Unable to create socket for server %d\n", i + 1);
-            return -1;
-        }
-        printf("Socket %d created successfully\n", i + 1);
-
-        // Set up server address for the current server
+        memset(&server_addr, 0, sizeof(server_addr));
         server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(current_port);  // Use current_port
-        server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        server_addr.sin_port = htons(port);
+        inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr);
 
-        // Connect to the server
-        if (connect(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-            printf("Unable to connect to server %d\n", i + 1);
-            return -1;
-        }
-        printf("Connected to server %d successfully\n", i + 1);
-
-        // Send the entire message struct to the server
-        if (send(socket_desc, &message, sizeof(message), 0) < 0) {
-            printf("Unable to send message to server %d\n", i + 1);
-            return -1;
+        if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == 0) {
+            printf("Connected to server at %s:%d\n", SERVER_IP, port);
+            break;
         }
 
-        // Receive the response from the server (same message struct)
-        if (recv(socket_desc, &message, sizeof(message), 0) < 0) {
-            printf("Error while receiving the message from server %d\n", i + 1);
-            return -1;
-        }
-
-        printf("Received the same message back from server %d:\n", i + 1);
-        printf("Port: %d, Rows: %d, Cols: %d\n", message.port_number, message.num_rows, message.num_cols);
-        for (int r = 0; r < (message.num_rows > 2 ? 2 : message.num_rows); r++) {
-            for (int c = 0; c < (message.num_cols > 2 ? 2 : message.num_cols); c++) {
-                printf("%.2f ", message.floats[r][c]);
-            }
-            printf("\n");
-        }
-
-        // Close the socket after communication with the server
-        close(socket_desc);
-
-        // Increment responses received
-        responses_received++;
+        close(sock);
+        port++;
     }
 
-    // Check if all servers responded
-    if (responses_received == n_servers) {
-        printf("Congrats! All servers have responded successfully.\n");
+    // Send header first
+    if (send(sock, &header, sizeof(header), 0) != sizeof(header)) {
+        perror("Failed to send header");
+        close(sock);
+        free(data);
+        return 1;
+    }
+
+    // Calculate the number of chunks and handle remainder
+    int total_chunks = num_floats / CHUNK_SIZE;
+    int remainder = num_floats % CHUNK_SIZE;
+
+    // Send full chunks
+    for (int i = 0; i < total_chunks; ++i) {
+        if (send(sock, &data[i * CHUNK_SIZE], CHUNK_SIZE * sizeof(float), 0) != CHUNK_SIZE * sizeof(float)) {
+            perror("Failed to send chunk of data");
+            close(sock);
+            free(data);
+            return 1;
+        }
+        printf("Sent chunk %d of %d\n", i + 1, total_chunks);
+    }
+
+    // Send the remainder if it exists
+    if (remainder > 0) {
+        if (send(sock, &data[total_chunks * CHUNK_SIZE], remainder * sizeof(float), 0) != remainder * sizeof(float)) {
+            perror("Failed to send remainder chunk");
+            close(sock);
+            free(data);
+            return 1;
+        }
+        printf("Sent remainder chunk of size %d\n", remainder);
+    }
+
+    // Receive echoed header
+    FloatMessageHeader echoed_header;
+    if (recv(sock, &echoed_header, sizeof(echoed_header), 0) != sizeof(echoed_header)) {
+        perror("Failed to receive echoed header");
     } else {
-        printf("Some servers did not respond.\n");
+        printf("Received echoed header: port=%d, floats=%d\n",
+               echoed_header.port_number, echoed_header.num_of_floats);
     }
 
+    // Receive echoed float array
+    float* echoed_data = malloc(num_floats * sizeof(float));
+    if (recv(sock, echoed_data, num_floats * sizeof(float), 0) != num_floats * sizeof(float)) {
+        perror("Failed to receive echoed float array");
+    } else {
+        printf("Received echoed float array (first 5 values):\n");
+        for (int i = 0; i < (num_floats > 5 ? 5 : num_floats); ++i) {
+            printf("%.2f ", echoed_data[i]);
+        }
+        printf("\n");
+    }
+
+    // Cleanup
+    free(data);
+    free(echoed_data);
+    close(sock);
     return 0;
 }
