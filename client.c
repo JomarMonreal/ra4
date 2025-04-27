@@ -43,6 +43,27 @@ float* convert2Dto1D(float** matrix, int rows, int cols) {
     return array;
 }
 
+// Converts a 1D array back into a 2D matrix
+float** convert1Dto2D(float* array, int rows, int cols) {
+    float** matrix = (float**)malloc(rows * sizeof(float*));
+    if (!matrix) {
+        perror("Failed to allocate row pointers");
+        exit(1);
+    }
+
+    for (int i = 0; i < rows; ++i) {
+        matrix[i] = (float*)malloc(cols * sizeof(float));
+        if (!matrix[i]) {
+            perror("Failed to allocate row");
+            exit(1);
+        }
+        memcpy(matrix[i], &array[i * cols], cols * sizeof(float));
+    }
+
+    return matrix;
+}
+
+
 // Loads IP:port pairs from a text file
 int load_servers(const char* filename, ServerInfo* servers, int max_servers) {
     FILE* file = fopen(filename, "r");
@@ -161,7 +182,7 @@ int main() {
 
     int current_row = 0;
     for (int s = 0; s < num_servers; ++s) {
-        int rows_to_send = rows_per_server + (s < remainder ? 1 : 0); // distribute remainder
+        int rows_to_send = rows_per_server + (s < remainder ? 1 : 0);
         float* chunk = convert2Dto1D(&matrix[current_row], rows_to_send, n);
         int num_floats = rows_to_send * n;
 
