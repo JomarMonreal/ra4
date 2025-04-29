@@ -58,7 +58,12 @@ int main(int argc, char *argv[]) {
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    
+    char ip_str[INET_ADDRSTRLEN];
+    printf("Enter IP address to bind the server to: ");
+    scanf("%15s", ip_str);
+
+server_addr.sin_addr.s_addr = inet_addr(ip_str);
 
     while (bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         printf("Couldn't bind to the port %d, trying %d...\n", port, port + 1);
