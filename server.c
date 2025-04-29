@@ -11,7 +11,7 @@
      {
          for (int j = 0; j < n; j++)
          {
-            printf("%f ", matrix[(i * n) + j]);
+            printf("%.2f ", matrix[(i * n) + j]);
          }   
          printf("\n");
      }

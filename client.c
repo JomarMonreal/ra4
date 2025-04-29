@@ -32,7 +32,7 @@ float * generateMatrix(int size) {
      {
          for (int j = 0; j < n; j++)
          {
-            printf("%f ", matrix[(i * n) + j]);
+            printf("%.2f ", matrix[(i * n) + j]);
          }   
          printf("\n");
      }
@@ -41,7 +41,7 @@ float * generateMatrix(int size) {
  void printArray(float * arr, int size) {
      for (int j = 0; j < size; j++)
      {
-         printf("%f ", arr[j]);
+         printf("%.2f ", arr[j]);
      }   
      printf("\n");
  }
