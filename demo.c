@@ -131,10 +131,7 @@ void communicate_with_server(const ServerInfo* server, float* data, int num_floa
 
     float* echoed_data = malloc(num_floats * sizeof(float));
     if (recv(sock, echoed_data, num_floats * sizeof(float), 0) == num_floats * sizeof(float)) {
-        printf("Received float array (first 5 values): ");
-        for (int i = 0; i < (num_floats > 5 ? 5 : num_floats); ++i)
-            printf("%.2f ", echoed_data[i]);
-        printf("\n");
+        printMatrix(echoed_data, size, num_floats / size);
     }
 
     free(echoed_data);
@@ -146,19 +143,23 @@ int main() {
     srand(time(NULL));
 
     ServerInfo servers[MAX_SERVERS];
-    int num_servers = load_servers("servers.txt", servers, MAX_SERVERS);
+    int num_servers = load_servers("demo_servers.txt", servers, MAX_SERVERS);
     if (num_servers <= 0) {
         fprintf(stderr, "No servers loaded\n");
         return 1;
     }
 
-    int n;
-    printf("Enter matrix dimensions (n): ");
-    scanf("%d", &n);
+    int n = 3;
 
-    float * matrix = generateMatrix(n);
+    /* use this for testing the example 3x3 matrix with input size 3 */
+     float *matrix = (float *)malloc(n * n * sizeof(float));
+     for (int i = 0; i < n; i++) {
+         for (int j = 0; j < n; j++) {
+             matrix[i * n + j] = (11 + i) + (j * n);
+         }
+     }
     int total_floats = n * n;
-    // printMatrix(matrix, n, n);
+    printMatrix(matrix, n, n);
 
     int rows_per_server = n / num_servers;
     int remainder = n % num_servers;

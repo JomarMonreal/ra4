@@ -11,7 +11,7 @@
      {
          for (int j = 0; j < n; j++)
          {
-            printf("%.2f ", matrix[(i * n) + j]);
+            printf("%.2f ", matrix[(j * m) + i]);
          }   
          printf("\n");
      }
@@ -103,10 +103,9 @@ int main(void) {
             received += chunk;
         }
 
-        printf("Received %d floats from %d x %d matrix. Sample:\n",
+        printf("Received %d floats from %d x %d matrix\n",
                header.num_of_floats, header.matrix_size, header.matrix_size);
 
-        printMatrix(floats, header.num_of_floats / header.matrix_size, header.matrix_size);
 
         printf("\n");
 
@@ -116,9 +115,10 @@ int main(void) {
         printf("Echoed message back to client.\n");
 
         free(floats);
-    end_connection:
-        close(client_sock);
-        printf("Closed connection with client.\n");
+
+        end_connection:
+            close(client_sock);
+            printf("Closed connection with client.\n");
     }
 
     // close(socket_desc); // Add this if you implement termination later
