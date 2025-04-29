@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "headers.h"     // Assume this includes standard system headers
 #include "message.h"     // Updated header definitions below
 #include <stdio.h>
@@ -5,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sched.h> 
 
  void printMatrix(float * matrix, int m, int n) {
      for (int i = 0; i < m; i++)
@@ -25,7 +27,24 @@
      printf("\n");
  }
 
-int main(void) {
+int main(int argc, char *argv[]) {
+
+    // Ask user for a core to bind the server to
+    if (argc > 1) {
+        int core = atoi(argv[1]);
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(core, &set);
+
+        if (sched_setaffinity(0, sizeof(cpu_set_t), &set) != 0) {
+            perror("Failed to set CPU affinity");
+        } else {
+            printf("Server bound to CPU core %d\n", core);
+        }
+    } else {
+        printf("No core binding applied. Running on default.\n");
+    }
+
     int socket_desc, client_sock, client_size;
     struct sockaddr_in server_addr, client_addr;
     int port = 2000;
