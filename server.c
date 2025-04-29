@@ -6,6 +6,25 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+ void printMatrix(float * matrix, int m, int n) {
+     for (int i = 0; i < m; i++)
+     {
+         for (int j = 0; j < n; j++)
+         {
+            printf("%f ", matrix[(i * n) + j]);
+         }   
+         printf("\n");
+     }
+ }
+ 
+ void printArray(float * arr, int size) {
+     for (int j = 0; j < size; j++)
+     {
+         printf("%f ", arr[j]);
+     }   
+     printf("\n");
+ }
+
 int main(void) {
     int socket_desc, client_sock, client_size;
     struct sockaddr_in server_addr, client_addr;
@@ -84,12 +103,11 @@ int main(void) {
             received += chunk;
         }
 
-        printf("Received %d floats from port %d. Sample:\n",
-               header.num_of_floats, header.port_number);
+        printf("Received %d floats from %d x %d matrix. Sample:\n",
+               header.num_of_floats, header.matrix_size, header.matrix_size);
 
-        for (int i = 0; i < (num_floats > 5 ? 5 : num_floats); i++) {
-            printf("%.2f", floats[i]);
-        }
+        printMatrix(floats, header.num_of_floats / header.matrix_size, header.matrix_size);
+
         printf("\n");
 
         // (Optional) Echo header + floats back

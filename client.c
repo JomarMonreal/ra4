@@ -15,54 +15,36 @@ float generateRandomNumber(int min, int max) {
     return min + rand() % (max + 1 - min) ;
 }
 
-float ** generateMatrix(int size) {
-    float ** matrix = (float **) malloc(sizeof(float*) * size);
-    for (int i = 0; i < size; i++)
-    {
-        matrix[i] = (float *) malloc(sizeof(float) * size);
-        for (int j = 0; j < size; j++)
-        {
-            matrix[i][j] = generateRandomNumber(1,10);
-        }   
-    }
-    return matrix;
-}
+float * generateMatrix(int size) {
+     float * matrix = (float *) malloc(sizeof(float) * size * size);
+     for (int i = 0; i < size; i++)
+     {
+         for (int j = 0; j < size; j++)
+         {
+             matrix[i* size + j] = generateRandomNumber(1,10);
+         }   
+     }
+     return matrix;
+ }
 
-// Flattens a 2D matrix into a 1D array
-float* convert2Dto1D(float** matrix, int rows, int cols) {
-    float* array = malloc(rows * cols * sizeof(float));
-    if (!array) {
-        perror("Failed to allocate flattened array");
-        exit(1);
-    }
-
-    for (int i = 0; i < rows; ++i) {
-        memcpy(&array[i * cols], matrix[i], cols * sizeof(float));
-    }
-
-    return array;
-}
-
-// Converts a 1D array back into a 2D matrix
-float** convert1Dto2D(float* array, int rows, int cols) {
-    float** matrix = (float**)malloc(rows * sizeof(float*));
-    if (!matrix) {
-        perror("Failed to allocate row pointers");
-        exit(1);
-    }
-
-    for (int i = 0; i < rows; ++i) {
-        matrix[i] = (float*)malloc(cols * sizeof(float));
-        if (!matrix[i]) {
-            perror("Failed to allocate row");
-            exit(1);
-        }
-        memcpy(matrix[i], &array[i * cols], cols * sizeof(float));
-    }
-
-    return matrix;
-}
-
+ void printMatrix(float * matrix, int m, int n) {
+     for (int i = 0; i < m; i++)
+     {
+         for (int j = 0; j < n; j++)
+         {
+            printf("%f ", matrix[(i * n) + j]);
+         }   
+         printf("\n");
+     }
+ }
+ 
+ void printArray(float * arr, int size) {
+     for (int j = 0; j < size; j++)
+     {
+         printf("%f ", arr[j]);
+     }   
+     printf("\n");
+ }
 
 // Loads IP:port pairs from a text file
 int load_servers(const char* filename, ServerInfo* servers, int max_servers) {
@@ -102,7 +84,7 @@ float* prepare_data(int* out_count) {
 }
 
 // Sends the data to the server and receives the processed result
-void communicate_with_server(const ServerInfo* server, float* data, int num_floats) {
+void communicate_with_server(const ServerInfo* server, float* data, int num_floats, int size) {
     printf("\n--- Connecting to %s:%d ---\n", server->ip, server->port);
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -124,7 +106,7 @@ void communicate_with_server(const ServerInfo* server, float* data, int num_floa
     }
 
     FloatMessageHeader header = {
-        .port_number = server->port,
+        .matrix_size = size,
         .num_of_floats = num_floats
     };
 
@@ -144,7 +126,7 @@ void communicate_with_server(const ServerInfo* server, float* data, int num_floa
     if (recv(sock, &echoed_header, sizeof(echoed_header), 0) == sizeof(echoed_header)) {
         printf("Received echoed header from %s:%d → port=%d, floats=%d\n",
                server->ip, server->port,
-               echoed_header.port_number, echoed_header.num_of_floats);
+               echoed_header.matrix_size, echoed_header.num_of_floats);
     }
 
     float* echoed_data = malloc(num_floats * sizeof(float));
@@ -173,29 +155,30 @@ int main() {
     printf("Enter matrix dimensions (n): ");
     scanf("%d", &n);
 
-    float** matrix = generateMatrix(n);
-    float* flat_data = convert2Dto1D(matrix, n, n);
+    float * matrix = generateMatrix(n);
     int total_floats = n * n;
+    printMatrix(matrix, n, n);
 
     int rows_per_server = n / num_servers;
     int remainder = n % num_servers;
 
-    int current_row = 0;
+    int current_start = 0;
     for (int s = 0; s < num_servers; ++s) {
         int rows_to_send = rows_per_server + (s < remainder ? 1 : 0);
-        float* chunk = convert2Dto1D(&matrix[current_row], rows_to_send, n);
         int num_floats = rows_to_send * n;
+        float* chunk = (float  *) malloc(num_floats * sizeof(float));
+        for (int i = 0; i < num_floats; i++) {
+            chunk[i] = matrix[i + current_start];
+        }
 
-        communicate_with_server(&servers[s], chunk, num_floats);
+        communicate_with_server(&servers[s], chunk, num_floats, n);
         free(chunk);
 
-        current_row += rows_to_send;
+        current_start += num_floats;
     }
 
     // Cleanup
-    for (int i = 0; i < n; ++i) free(matrix[i]);
     free(matrix);
-    free(flat_data);
 
     return 0;
 }

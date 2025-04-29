@@ -1,7 +1,9 @@
 {
-    "files.associations": {
-        "*.lex": "lex",
-        "*.y": "c",
-        "headers.h": "c"
-    }
+  "files.associations": {
+    "*.lex": "lex",
+    "*.y": "c",
+    "headers.h": "c",
+    "time.h": "c",
+    "stdlib.h": "c"
+  }
 }

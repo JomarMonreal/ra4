@@ -10,7 +10,7 @@ typedef struct {
 } FloatMessage;
 
 typedef struct {
-    int port_number;
+    int matrix_size;
     int num_of_floats;
 } FloatMessageHeader;
 

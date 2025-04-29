@@ -1,7 +1,7 @@
 s:
-	gcc server.c -o server
+	gcc server.c -fanalyzer -Wanalyzer-too-complex -o server
 	./server
 
 c:
-	gcc client.c -o client
+	gcc client.c -fanalyzer -o client
 	./client
