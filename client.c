@@ -163,6 +163,9 @@ int main() {
     int rows_per_server = n / num_servers;
     int remainder = n % num_servers;
 
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     int current_start = 0;
     for (int s = 0; s < num_servers; ++s) {
         int rows_to_send = rows_per_server + (s < remainder ? 1 : 0);
@@ -178,6 +181,10 @@ int main() {
         current_start += num_floats;
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    float time_elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+
+    printf("\ntime elapsed: %f seconds\n", time_elapsed);
     // Cleanup
     free(matrix);
 
