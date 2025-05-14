@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <pthread.h>
 
 #define INITIAL_PORT 2000
 #define SERVER_IP "127.0.0.1"
@@ -84,65 +85,69 @@ float* prepare_data(int* out_count) {
 }
 
 // Sends the data to the server and receives the processed result
-void communicate_with_server(const ServerInfo* server, float* data, int num_floats, int size) {
-    printf("\n--- Connecting to %s:%d ---\n", server->ip, server->port);
+void* communicate_with_server(void *arg) {
+    ThreadArgs *args = (ThreadArgs *)arg;
+
+    printf("\n--- Connecting to %s:%d ---\n", args->server.ip, args->server.port);
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         perror("Socket creation failed");
-        return;
+        free(args->data);
+        free(args);
+        return NULL;
     }
 
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(server->port);
-    inet_pton(AF_INET, server->ip, &server_addr.sin_addr);
+    server_addr.sin_port = htons(args->server.port);
+    inet_pton(AF_INET, args->server.ip, &server_addr.sin_addr);
 
     if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
         perror("Connection failed");
         close(sock);
-        return;
+        free(args->data);
+        free(args);
+        return NULL;
     }
 
     FloatMessageHeader header = {
-        .matrix_size = size,
-        .num_of_floats = num_floats
+        .matrix_size = args->matrix_size,
+        .num_of_floats = args->num_floats,
+        .start_index = args->start_index
     };
 
     send(sock, &header, sizeof(header), 0);
 
-    int total_chunks = num_floats / CHUNK_SIZE;
-    int remainder = num_floats % CHUNK_SIZE;
+    int total_chunks = args->num_floats / CHUNK_SIZE;
+    int remainder = args->num_floats % CHUNK_SIZE;
 
     for (int i = 0; i < total_chunks; ++i) {
-        send(sock, &data[i * CHUNK_SIZE], CHUNK_SIZE * sizeof(float), 0);
+        send(sock, &args->data[i * CHUNK_SIZE], CHUNK_SIZE * sizeof(float), 0);
     }
     if (remainder > 0) {
-        send(sock, &data[total_chunks * CHUNK_SIZE], remainder * sizeof(float), 0);
+        send(sock, &args->data[total_chunks * CHUNK_SIZE], remainder * sizeof(float), 0);
     }
 
     FloatMessageHeader echoed_header;
-    if (recv(sock, &echoed_header, sizeof(echoed_header), 0) == sizeof(echoed_header)) {
-        printf("Received echoed header from %s:%d → port=%d, floats=%d\n",
-               server->ip, server->port,
-               echoed_header.matrix_size, echoed_header.num_of_floats);
-    }
+    recv(sock, &echoed_header, sizeof(echoed_header), 0);
 
-    float* echoed_data = malloc(num_floats * sizeof(float));
-    if (recv(sock, echoed_data, num_floats * sizeof(float), 0) == num_floats * sizeof(float)) {
-        printf("Received float array (first 5 values): ");
-        for (int i = 0; i < (num_floats > 5 ? 5 : num_floats); ++i)
-            printf("%.2f ", echoed_data[i]);
-        printf("\n");
+    float* echoed_data = malloc(args->num_floats * sizeof(float));
+    recv(sock, echoed_data, args->num_floats * sizeof(float), 0);
+
+    for (int i = 0; i < args->num_floats; i++) {
+        args->matrix[args->start_index + i] = echoed_data[i];
     }
 
     free(echoed_data);
+    free(args->data);
+    free(args);
     close(sock);
+    return NULL;
 }
 
 int main() {
-
     srand(time(NULL));
 
     ServerInfo servers[MAX_SERVERS];
@@ -156,37 +161,56 @@ int main() {
     printf("Enter matrix dimensions (n): ");
     scanf("%d", &n);
 
-    float * matrix = generateMatrix(n);
-    int total_floats = n * n;
+    float *matrix = generateMatrix(n);
+    // float *matrix = (float *)malloc(n * n * sizeof(float));
+    //  for (int i = 0; i < n; i++) {
+    //      for (int j = 0; j < n; j++) {
+    //          matrix[i * n + j] = (11 + i) + (j * n);
+    //      }
+    //  }
     // printMatrix(matrix, n, n);
+    int total_floats = n * n;
 
     int rows_per_server = n / num_servers;
     int remainder = n % num_servers;
 
+    pthread_t threads[MAX_SERVERS];
+    int current_start = 0;
+
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    int current_start = 0;
     for (int s = 0; s < num_servers; ++s) {
         int rows_to_send = rows_per_server + (s < remainder ? 1 : 0);
         int num_floats = rows_to_send * n;
-        float* chunk = (float  *) malloc(num_floats * sizeof(float));
-        for (int i = 0; i < num_floats; i++) {
-            chunk[i] = matrix[i + current_start];
+
+        ThreadArgs *args = malloc(sizeof(ThreadArgs));
+        args->server = servers[s];
+        args->num_floats = num_floats;
+        args->matrix_size = n;
+        args->start_index = current_start;
+        args->matrix = matrix;
+        args->data = malloc(num_floats * sizeof(float));
+
+        for (int i = 0; i < num_floats; ++i) {
+            args->data[i] = matrix[current_start + i];
         }
 
-        communicate_with_server(&servers[s], chunk, num_floats, n);
-        free(chunk);
-
+        pthread_create(&threads[s], NULL, communicate_with_server, args);
         current_start += num_floats;
+    }
+
+    for (int s = 0; s < num_servers; ++s) {
+        pthread_join(threads[s], NULL);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &end);
     float time_elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
+    printf("\n");
+    // printMatrix(matrix, n, n);
     printf("\ntime elapsed: %f seconds\n", time_elapsed);
-    // Cleanup
-    free(matrix);
 
+    free(matrix);
     return 0;
 }

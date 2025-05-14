@@ -132,9 +132,9 @@
      srand(time(NULL));
  
      /* use this for testing the example 3x3 matrix with input size 3 */
-     float *defaultMatrix = (float *)malloc(3 * 3 * sizeof(float));
+     float *defaultMatrix = (float *)malloc(3 * 2 * sizeof(float));
      for (int i = 0; i < 3; i++) {
-         for (int j = 0; j < 3; j++) {
+         for (int j = 0; j < 2; j++) {
              defaultMatrix[i * 3 + j] = (11 + i) + (j * 3);
          }
      }
@@ -154,7 +154,7 @@
      printSquareMatrix(defaultMatrix, 3);
      printf("\n");
  
-     zsn(defaultMatrix, 3, 3, t);
+     zsn(defaultMatrix, 2, 3, t);
     //  zsn(matrix, size, size, t);
 
     clock_gettime(CLOCK_MONOTONIC, &end);

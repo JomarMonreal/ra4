@@ -7,6 +7,15 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sched.h> 
+#include <math.h> 
+#include <time.h>
+ 
+ typedef struct ARG{
+     float * matrix;
+     int cols;
+     int rows;
+     int start_row; 
+ }args;
 
  void printMatrix(float * matrix, int m, int n) {
      for (int i = 0; i < m; i++)
@@ -27,6 +36,32 @@
      printf("\n");
  }
 
+ 
+ void * computeRows(void * arguments) {
+     args * temp = (args *) arguments;
+
+     printf("Rows: %d\n", temp->rows);
+ 
+     for (int j = 0; j < temp->rows; j++) {
+         float a_j = 0;
+         float d_j = 0;
+ 
+         for (int i = 0; i < temp->cols; i++) {
+             a_j += temp->matrix[j * temp->cols + i];
+         }
+         a_j /= temp->cols;
+ 
+         for (int i = 0; i < temp->cols; i++) {
+             d_j += pow(temp->matrix[j * temp->cols + i] - a_j, 2);
+         }
+         d_j = sqrt(d_j / temp->cols);
+ 
+         for (int i = 0; i < temp->cols; i++) {
+             temp->matrix[j * temp->cols + i] = (temp->matrix[j * temp->cols + i] - a_j) / d_j;
+         }
+     }
+ }
+ 
 int main(int argc, char *argv[]) {
 
     // Ask user for a core to bind the server to
@@ -63,7 +98,7 @@ int main(int argc, char *argv[]) {
     printf("Enter IP address to bind the server to: ");
     scanf("%15s", ip_str);
 
-server_addr.sin_addr.s_addr = inet_addr(ip_str);
+    server_addr.sin_addr.s_addr = inet_addr(ip_str);
 
     while (bind(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         printf("Couldn't bind to the port %d, trying %d...\n", port, port + 1);
@@ -127,16 +162,30 @@ server_addr.sin_addr.s_addr = inet_addr(ip_str);
             received += chunk;
         }
 
-        printf("Received %d floats from %d x %d matrix\n",
-               header.num_of_floats, header.matrix_size, header.matrix_size);
+        printf("Received %d floats from %d x %d matrix at index %d\n",
+               header.num_of_floats, header.matrix_size, header.matrix_size, header.start_index);
 
 
         printf("\n");
 
-        // (Optional) Echo header + floats back
         send(client_sock, &header, sizeof(header), 0);
+        
+        args * temp = malloc(sizeof(args));
+        temp->matrix = floats;
+        temp->cols = header.matrix_size;
+        temp->rows = header.num_of_floats / header.matrix_size;
+        temp->start_row = header.start_index;
+
+        struct timespec start, end;
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        computeRows(temp);
+
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        float time_elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+
+        printf("\n");
+        printf("\ntime elapsed: %f seconds\n", time_elapsed);   
         send(client_sock, floats, float_bytes, 0);
-        printf("Echoed message back to client.\n");
 
         free(floats);
 
@@ -145,6 +194,5 @@ server_addr.sin_addr.s_addr = inet_addr(ip_str);
             printf("Closed connection with client.\n");
     }
 
-    // close(socket_desc); // Add this if you implement termination later
     return 0;
 }

@@ -3,7 +3,6 @@
 1. Type all needed sockets in `servers.txt` in csv format (e.g. "127.0.0.1,2000")
 2. Enter `bash lab04.sh 0` to run as master.
 3. Enter `bash lab04.sh 1 <CPU_NUM>` to run as slave. If no CPU_NUM provided, it will be run with no core affinity.
-4. For slaves, enter the CPU core index first. When entered nothing, it will be assigned by default.
 
 ### For demo
 
